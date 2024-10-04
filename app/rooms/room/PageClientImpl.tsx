@@ -22,10 +22,9 @@ import {
   RoomConnectOptions,
 } from 'livekit-client';
 import { useRouter } from 'next/navigation';
-import React from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 
-const CONN_DETAILS_ENDPOINT =
-  process.env.NEXT_PUBLIC_CONN_DETAILS_ENDPOINT ?? '/api/connection-details';
+const CONN_DETAILS_ENDPOINT = process.env.NEXT_PUBLIC_CONN_DETAILS_ENDPOINT ?? '/api/connection-details';
 const SHOW_SETTINGS_MENU = process.env.NEXT_PUBLIC_SHOW_SETTINGS_MENU == 'true';
 
 export function PageClientImpl(props: {
@@ -34,33 +33,37 @@ export function PageClientImpl(props: {
   hq: boolean;
   codec: VideoCodec;
 }) {
-  const [preJoinChoices, setPreJoinChoices] = React.useState<LocalUserChoices | undefined>(
-    undefined,
-  );
-  const preJoinDefaults = React.useMemo(() => {
+  const [preJoinChoices, setPreJoinChoices] = useState<LocalUserChoices | undefined>(undefined);
+  const [connectionDetails, setConnectionDetails] = useState<ConnectionDetails | undefined>(undefined);
+
+  const preJoinDefaults = useMemo(() => {
     return {
       username: '',
       videoEnabled: true,
       audioEnabled: true,
     };
   }, []);
-  const [connectionDetails, setConnectionDetails] = React.useState<ConnectionDetails | undefined>(
-    undefined,
-  );
 
-  const handlePreJoinSubmit = React.useCallback(async (values: LocalUserChoices) => {
+  const handlePreJoinSubmit = useCallback(async (values: LocalUserChoices) => {
     setPreJoinChoices(values);
-    const url = new URL(CONN_DETAILS_ENDPOINT, window.location.origin);
-    url.searchParams.append('roomName', props.roomName);
-    url.searchParams.append('participantName', values.username);
-    if (props.region) {
-      url.searchParams.append('region', props.region);
+
+    try {
+      const url = new URL(CONN_DETAILS_ENDPOINT, window.location.origin);
+      url.searchParams.append('roomName', props.roomName);
+      url.searchParams.append('participantName', values.username);
+      if (props.region) {
+        url.searchParams.append('region', props.region);
+      }
+
+      const connectionDetailsResp = await fetch(url.toString());
+      const connectionDetailsData = await connectionDetailsResp.json();
+      setConnectionDetails(connectionDetailsData);
+    } catch (error) {
+      console.error('Error fetching connection details:', error);
     }
-    const connectionDetailsResp = await fetch(url.toString());
-    const connectionDetailsData = await connectionDetailsResp.json();
-    setConnectionDetails(connectionDetailsData);
-  }, []);
-  const handlePreJoinError = React.useCallback((e: any) => console.error(e), []);
+  }, [props.roomName, props.region]);
+
+  const handlePreJoinError = useCallback((e: any) => console.error(e), []);
 
   return (
     <main data-lk-theme="default" style={{ height: '100%' }}>
@@ -91,18 +94,13 @@ function VideoConferenceComponent(props: {
     codec: VideoCodec;
   };
 }) {
-  const e2eePassphrase =
-    typeof window !== 'undefined' && decodePassphrase(location.hash.substring(1));
-
-  const worker =
-    typeof window !== 'undefined' &&
-    e2eePassphrase &&
-    new Worker(new URL('livekit-client/e2ee-worker', import.meta.url));
+  const e2eePassphrase = typeof window !== 'undefined' && decodePassphrase(location.hash.substring(1));
+  const worker = typeof window !== 'undefined' && e2eePassphrase && new Worker(new URL('livekit-client/e2ee-worker', import.meta.url));
   const e2eeEnabled = !!(e2eePassphrase && worker);
   const keyProvider = new ExternalE2EEKeyProvider();
-  const [e2eeSetupComplete, setE2eeSetupComplete] = React.useState(false);
+  const [e2eeSetupComplete, setE2eeSetupComplete] = useState(false);
 
-  const roomOptions = React.useMemo((): RoomOptions => {
+  const roomOptions = useMemo((): RoomOptions => {
     let videoCodec: VideoCodec | undefined = props.options.codec ? props.options.codec : 'vp9';
     if (e2eeEnabled && (videoCodec === 'av1' || videoCodec === 'vp9')) {
       videoCodec = undefined;
@@ -114,9 +112,7 @@ function VideoConferenceComponent(props: {
       },
       publishDefaults: {
         dtx: false,
-        videoSimulcastLayers: props.options.hq
-          ? [VideoPresets.h1080, VideoPresets.h720]
-          : [VideoPresets.h540, VideoPresets.h216],
+        videoSimulcastLayers: props.options.hq ? [VideoPresets.h1080, VideoPresets.h720] : [VideoPresets.h540, VideoPresets.h216],
         red: !e2eeEnabled,
         videoCodec,
       },
@@ -125,57 +121,32 @@ function VideoConferenceComponent(props: {
       },
       adaptiveStream: { pixelDensity: 'screen' },
       dynacast: true,
-      e2ee: e2eeEnabled
-        ? {
-            keyProvider,
-            worker,
-          }
-        : undefined,
+      e2ee: e2eeEnabled ? { keyProvider, worker } : undefined,
     };
   }, [props.userChoices, props.options.hq, props.options.codec]);
 
-  const room = React.useMemo(() => new Room(roomOptions), []);
+  const room = useMemo(() => new Room(roomOptions), [roomOptions]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (e2eeEnabled) {
-      keyProvider
-        .setKey(decodePassphrase(e2eePassphrase))
-        .then(() => {
-          room.setE2EEEnabled(true).catch((e) => {
-            if (e instanceof DeviceUnsupportedError) {
-              alert(
-                `You're trying to join an encrypted meeting, but your browser does not support it. Please update it to the latest version and try again.`,
-              );
-              console.error(e);
-            } else {
-              throw e;
-            }
-          });
-        })
-        .then(() => setE2eeSetupComplete(true));
+      keyProvider.setKey(decodePassphrase(e2eePassphrase)).then(() => {
+        room.setE2EEEnabled(true).catch((e) => {
+          if (e instanceof DeviceUnsupportedError) {
+            alert(`Your browser does not support encrypted meetings. Please update it and try again.`);
+            console.error(e);
+          } else {
+            throw e;
+          }
+        });
+      }).then(() => setE2eeSetupComplete(true));
     } else {
       setE2eeSetupComplete(true);
     }
-  }, [e2eeEnabled, room, e2eePassphrase]);
+  }, [e2eeEnabled, room, e2eePassphrase, keyProvider]);
 
-  const connectOptions = React.useMemo((): RoomConnectOptions => {
-    return {
-      autoSubscribe: true,
-    };
-  }, []);
-
+  const connectOptions = useMemo((): RoomConnectOptions => ({ autoSubscribe: true }), []);
   const router = useRouter();
-  const handleOnLeave = React.useCallback(() => router.push('/'), [router]);
-  const handleError = React.useCallback((error: Error) => {
-    console.error(error);
-    alert(`Encountered an unexpected error, check the console logs for details: ${error.message}`);
-  }, []);
-  const handleEncryptionError = React.useCallback((error: Error) => {
-    console.error(error);
-    alert(
-      `Encountered an unexpected encryption error, check the console logs for details: ${error.message}`,
-    );
-  }, []);
+  const handleOnLeave = useCallback(() => router.push('/'), [router]);
 
   return (
     <>
@@ -188,8 +159,7 @@ function VideoConferenceComponent(props: {
         video={props.userChoices.videoEnabled}
         audio={props.userChoices.audioEnabled}
         onDisconnected={handleOnLeave}
-        onEncryptionError={handleEncryptionError}
-        onError={handleError}
+        onError={(error) => console.error(error)}
       >
         <VideoConference
           chatMessageFormatter={formatChatMessageLinks}
