@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  assetPrefix: process.env.STATIC_URL || '@{app.static_url}',
+  assetPrefix: process.env.STATIC_URL || 'https://freeflowuniverse.github.io/livekit_meet',
   output: 'export',
   swcMinify: false,
   reactStrictMode: false,
