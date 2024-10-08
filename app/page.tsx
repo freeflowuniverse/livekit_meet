@@ -168,7 +168,7 @@ export default function Page() {
     <>
       <main className={styles.main} data-lk-theme="default">
         <div className="header">
-          <img src="/images/ow-logo.png" alt="LiveKit Meet" height="80" />
+          <img src="https://freeflowuniverse.github.io/livekit_meet/images/ow-logo.png" alt="LiveKit Meet" height="80" />
           <h2>
             OurWorld video conferencing app
           </h2>
