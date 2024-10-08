@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     template: '%s',
   },
   description:
-    'OurWorld Meet is a video conferencing app powered by livekit.',
+    'OurWorld Meet is a video conferencing app powered by ThreeFold and LiveKit.',
   icons: {
     icon: {
       rel: 'icon',
