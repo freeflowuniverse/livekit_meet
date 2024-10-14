@@ -1,7 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     assetPrefix: 'https://freeflowuniverse.github.io/livekit_meet',
-    basePath: '/meet',
     output: 'export',
     swcMinify: false,
     reactStrictMode: false,
