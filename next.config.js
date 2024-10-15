@@ -12,7 +12,13 @@ const nextConfig = {
         enforce: 'pre',
         use: ['source-map-loader'],
       });
-      return config;
+      // Set custom filename and chunkFilename for client-side bundles
+      if (!isServer) {
+        config.output.filename = 'static/js/[name].js';
+        config.output.chunkFilename = 'static/js/[name].chunk.js';
+      }
+
+    return config;
     },
   };
   
